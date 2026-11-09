@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hard Demon Ranking - Chahnkeh's Rankings</title>
+  <link rel="icon" type="image/x-icon" href="../media/favicon.ico">
+  <link rel="stylesheet" href="../css/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+
+<body data-page="hdl">
+  <nav class="nav-hdl" aria-label="Main Navigation">
+    <a href="../index.html" class="logo-link" aria-label="Go to homepage">
+      <svg class="nav-logo" width="36" height="36" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true" focusable="false">
+        <path d="M1 6V15H6V11C6 9.89543 6.89543 9 8 9C9.10457 9 10 9.89543 10 11V15H15V6L8 0L1 6Z" fill="#FFFFFF" />
+      </svg>
+    </a>
+    <div class="nav-links">
+      <a href="mdl.html">Medium Demon List</a>
+      <a href="hdl.html" aria-current="page">Hard Demon List</a>
+      <a href="idl.html">Insane Demon List</a>
+      <a href="aredl.html">All Rated Extreme Demon List</a>
+      <span class="version">v5.0.0</span>
+    </div>
+  </nav>
+
+  <main class="container layout-grid">
+    <section class="list-section">
+      <h1>Hard Demon Ranking</h1>
+
+      <div class="search-controls">
+        <label for="level-search">Search Level</label>
+        <input type="search" id="level-search" autocomplete="off">
+      </div>
+
+      <div class="filter-controls">
+        <label for="status-filter">Filter by Property:</label>
+        <select id="status-filter">
+          <option value="All">All Properties</option>
+          <option value="Promoted">Promoted</option>
+          <option value="Benchmark">Benchmark</option>
+          <option value="Technicality">Technicality</option>
+          <option value="Not Demon">Not Demon</option>
+          <option value="No">No</option>
+        </select>
+      </div>
+
+      <p id="results-status" class="results-status" role="status"></p>
+
+      <ul id="ranking-list" class="ranking-list">
+
+      </ul>
+    </section>
+
+    <section class="preview-section" aria-live="polite">
+      <div id="preview-content" class="preview-content">
+        <p class="preview-empty"><em>crickets</em></p>
+      </div>
+    </section>
+  </main>
+
+  <script src="../script/script.js"></script>
+</body>
+
+</html>
