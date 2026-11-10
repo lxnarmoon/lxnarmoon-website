@@ -12,9 +12,9 @@ const UNRANKED_STATUSES = ["Benchmark", "Not Demon", "Promoted", "Demoted", "Tec
 // Every page that uses the ranking layout. Each one loads data/_<page>.json
 const RANKING_PAGES = ['edl', 'mdl', 'hdl', 'idl', 'aredl'];
 
-// Overall score = gameplay 60% + deco 30% + song 10%
+// Overall score = gameplay 70% + deco 20% + song 10%
 // Weights are out of 10 (integers) so the rounding stays exact.
-const SCORE_WEIGHTS = { gameplay: 6, deco: 3, song: 1 };
+const SCORE_WEIGHTS = { gameplay: 7, deco: 2, song: 1 };
 const SCORE_LABELS = { gameplay: 'Gameplay', deco: 'Deco', song: 'Song' };
 
 // Highest threshold first. Anything under 10 is still shown as F.
