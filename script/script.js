@@ -10,7 +10,7 @@ const STATUS_MARKERS = {
 const UNRANKED_STATUSES = ["Benchmark", "Not Demon", "Promoted", "Demoted", "Technicality"];
 
 // Every page that uses the ranking layout. Each one loads data/_<page>.json
-const RANKING_PAGES = ['edl', 'mdl', 'hdl', 'idl', 'aredl'];
+const RANKING_PAGES = ['edl', 'mdl', 'hdl', 'idl', 'edl'];
 
 // Overall score = gameplay 70% + deco 20% + song 10%
 // Weights are out of 10 (integers) so the rounding stays exact.
