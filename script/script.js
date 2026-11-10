@@ -209,8 +209,8 @@ function buildScoreSection(item) {
 function buildStats(item) {
     const stats = [
         `<div class="stat">
-                    <dt>Personal GDDL Rating</dt>
-                    <dd class="stat-accent">${escapeHTML(item.gddlRating)}</dd>
+                    <dt>Personal Difficulty</dt>
+                    <dd class="stat-accent">${escapeHTML(item.diffRating)}</dd>
                 </div>`,
         `<div class="stat">
                     <dt>Level ID</dt>
