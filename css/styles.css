@@ -474,6 +474,25 @@ nav {
     color: var(--accent-text);
 }
 
+/* Personal difficulty: a pill filled with the rating's gradient color (set inline as --tier-bg) */
+.difficulty-badge {
+    display: inline-block;
+    max-width: 100%;
+    padding: 0.1em 0.6em;
+    background-color: var(--tier-bg);
+    border-radius: var(--radius);
+    color: var(--tier-ink);
+    font-size: clamp(1.05rem, 2.4vw, 1.5rem);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+@media (forced-colors: active) {
+    .difficulty-badge {
+        border: 1px solid CanvasText;
+    }
+}
+
 @media (max-width: 479px) {
     .preview-stats {
         grid-template-columns: minmax(0, 1fr);
