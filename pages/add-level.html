@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Add Level - lexy's Rankings</title>
+  <link rel="icon" type="image/x-icon" href="../media/favicon.ico">
+  <link rel="stylesheet" href="../css/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+
+<body data-page="add-level">
+  <nav class="nav-edl" aria-label="Main Navigation">
+    <a href="../index.html" class="logo-link" aria-label="Go to homepage">
+      <svg class="nav-logo" width="36" height="36" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true" focusable="false">
+        <path d="M1 6V15H6V11C6 9.89543 6.89543 9 8 9C9.10457 9 10 9.89543 10 11V15H15V6L8 0L1 6Z" fill="#FFFFFF" />
+      </svg>
+    </a>
+    <div class="nav-links">
+      <a href="mdl.html">Medium Demon List</a>
+      <a href="hdl.html">Hard Demon List</a>
+      <a href="idl.html">Insane Demon List</a>
+      <a href="edl.html">All Rated Extreme Demon List</a>
+      <a href="add-level.html" aria-current="page">Add Level</a>
+      <span class="version">v5.0.0</span>
+    </div>
+  </nav>
+
+  <main class="container add-container">
+
+    <!-- Shown only until WORKER_URL is filled in (see worker/README.md) -->
+    <section class="card" id="setup-card" hidden aria-labelledby="setup-title">
+      <h1 id="setup-title">Add Level isn't connected yet</h1>
+      <p>
+        Deploy the worker described in <code>worker/README.md</code>, then paste its address into
+        <code>WORKER_URL</code> at the top of <code>script/add-level.js</code>.
+      </p>
+    </section>
+
+    <!-- Step 1: unlock with an authenticator code -->
+    <section class="card" id="lock-card" aria-labelledby="lock-title">
+      <h1 id="lock-title">Add Level</h1>
+      <p>Enter the 6-digit code from Google Authenticator to unlock this page.</p>
+      <form id="unlock-form" class="unlock-form" novalidate>
+        <div class="field">
+          <label for="auth-code">Authenticator code</label>
+          <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+            placeholder="123456" aria-describedby="unlock-status" required>
+        </div>
+        <button class="button" type="submit" id="unlock-button">Unlock</button>
+      </form>
+      <p id="unlock-status" class="form-status" role="status"></p>
+    </section>
+
+    <!-- Step 2: the form -->
+    <section class="card" id="add-card" hidden aria-labelledby="add-title">
+      <div class="add-header">
+        <div>
+          <h1 id="add-title">Add Level</h1>
+          <p>Adds a level to the Extreme Demon List.</p>
+        </div>
+        <button class="button button-quiet" type="button" id="lock-button">Lock</button>
+      </div>
+
+      <form id="level-form" novalidate>
+        <fieldset>
+          <legend>Level</legend>
+          <div class="field" data-field="name">
+            <label for="f-name">Level name <span class="req" aria-hidden="true">*</span></label>
+            <input id="f-name" type="text" maxlength="100" autocomplete="off" required aria-describedby="e-name">
+            <p class="field-error" id="e-name" hidden></p>
+          </div>
+          <div class="field" data-field="creator">
+            <label for="f-creator">Creator <span class="req" aria-hidden="true">*</span></label>
+            <input id="f-creator" type="text" maxlength="100" autocomplete="off" required aria-describedby="e-creator">
+            <p class="field-error" id="e-creator" hidden></p>
+          </div>
+          <div class="field-grid">
+            <div class="field" data-field="id">
+              <label for="f-id">Level ID <span class="req" aria-hidden="true">*</span></label>
+              <input id="f-id" type="text" inputmode="numeric" autocomplete="off" required aria-describedby="e-id">
+              <p class="field-error" id="e-id" hidden></p>
+            </div>
+            <div class="field" data-field="diffRating">
+              <label for="f-diffRating">Personal difficulty <span class="req" aria-hidden="true">*</span></label>
+              <input id="f-diffRating" type="text" inputmode="decimal" autocomplete="off" placeholder="14.15" required
+                aria-describedby="e-diffRating">
+              <p class="field-error" id="e-diffRating" hidden></p>
+            </div>
+          </div>
+          <div class="field" data-field="video">
+            <label for="f-video">Video (YouTube link)</label>
+            <input id="f-video" type="text" inputmode="url" autocomplete="off" placeholder="https://youtu.be/..."
+              aria-describedby="e-video">
+            <p class="field-error" id="e-video" hidden></p>
+          </div>
+          <div class="field" data-field="comments">
+            <label for="f-comments">Comments</label>
+            <textarea id="f-comments" rows="4" maxlength="2000" aria-describedby="e-comments"></textarea>
+            <p class="field-error" id="e-comments" hidden></p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Score</legend>
+          <div class="field-grid field-grid-3">
+            <div class="field" data-field="gameplay">
+              <label for="f-gameplay">Gameplay <span class="req" aria-hidden="true">*</span></label>
+              <input id="f-gameplay" type="text" inputmode="numeric" autocomplete="off" placeholder="0-100" required
+                aria-describedby="e-gameplay">
+              <p class="field-error" id="e-gameplay" hidden></p>
+            </div>
+            <div class="field" data-field="deco">
+              <label for="f-deco">Deco <span class="req" aria-hidden="true">*</span></label>
+              <input id="f-deco" type="text" inputmode="numeric" autocomplete="off" placeholder="0-100" required
+                aria-describedby="e-deco">
+              <p class="field-error" id="e-deco" hidden></p>
+            </div>
+            <div class="field" data-field="song">
+              <label for="f-song">Song <span class="req" aria-hidden="true">*</span></label>
+              <input id="f-song" type="text" inputmode="numeric" autocomplete="off" placeholder="0-100" required
+                aria-describedby="e-song">
+              <p class="field-error" id="e-song" hidden></p>
+            </div>
+          </div>
+          <p class="field-hint" id="score-hint"></p>
+          <output id="score-live" class="score-live" for="f-gameplay f-deco f-song"></output>
+        </fieldset>
+
+        <fieldset>
+          <legend>Stats (optional)</legend>
+          <div class="field-grid">
+            <div class="field" data-field="attempts">
+              <label for="f-attempts">Attempts</label>
+              <input id="f-attempts" type="text" inputmode="numeric" autocomplete="off" aria-describedby="e-attempts">
+              <p class="field-error" id="e-attempts" hidden></p>
+            </div>
+            <div class="field" data-field="worstFail">
+              <label for="f-worstFail">Worst fail (%)</label>
+              <input id="f-worstFail" type="text" inputmode="decimal" autocomplete="off" aria-describedby="e-worstFail">
+              <p class="field-error" id="e-worstFail" hidden></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <details class="advanced" id="file-details">
+          <summary>File name</summary>
+          <div class="field" data-field="file">
+            <label for="f-file">Saved as data/<em>name</em>.json</label>
+            <input id="f-file" type="text" maxlength="60" autocomplete="off" spellcheck="false"
+              aria-describedby="e-file">
+            <p class="field-hint">Filled in from the level name. Change it only if that name is already taken.</p>
+            <p class="field-error" id="e-file" hidden></p>
+          </div>
+        </details>
+
+        <details class="advanced" open>
+          <summary>JSON preview</summary>
+          <pre id="json-preview" class="json-preview" aria-label="JSON that will be saved"></pre>
+        </details>
+
+        <div class="form-actions">
+          <button class="button" type="submit" id="submit-button">Add level</button>
+        </div>
+        <p id="form-status" class="form-status" role="status"></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="../script/script.js"></script>
+  <script src="../script/add-level.js"></script>
+</body>
+
+</html>

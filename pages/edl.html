@@ -23,6 +23,7 @@
       <a href="hdl.html">Hard Demon List</a>
       <a href="idl.html">Insane Demon List</a>
       <a href="edl.html" aria-current="page">All Rated Extreme Demon List</a>
+      <a href="add-level.html">Add Level</a>
       <span class="version">v5.0.0</span>
     </div>
   </nav>
@@ -36,16 +37,15 @@
         <input type="search" id="level-search" autocomplete="off">
       </div>
 
-      <div class="filter-controls">
-        <label for="status-filter">Filter by Property:</label>
-        <select id="status-filter">
-          <option value="All">All Properties</option>
-          <option value="Promoted">Promoted</option>
-          <option value="Demoted">Demoted</option>
-          <option value="Benchmark">Benchmark</option>
-          <option value="Technicality">Technicality</option>
-          <option value="Not Demon">Not Demon</option>
-          <option value="No">No</option>
+      <div class="sort-controls">
+        <label for="sort-select">Sort by</label>
+        <select id="sort-select">
+          <option value="difficulty-desc" selected>Difficulty: high to low</option>
+          <option value="difficulty-asc">Difficulty: low to high</option>
+          <option value="score-desc">Score: high to low</option>
+          <option value="score-asc">Score: low to high</option>
+          <option value="attempts-desc">Attempts: high to low</option>
+          <option value="attempts-asc">Attempts: low to high</option>
         </select>
       </div>
 

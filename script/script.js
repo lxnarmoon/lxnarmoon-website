@@ -1,16 +1,7 @@
 let selectedItem = null;
 
-const STATUS_MARKERS = {
-    "Promoted": { symbol: "↑", label: "Promoted" },
-    "Demoted": { symbol: "↓", label: "Demoted" },
-    "Technicality": { symbol: "*", label: "Technicality" },
-    "Not Demon": { symbol: "X", label: "Not Demon" }
-};
-
-const UNRANKED_STATUSES = ["Benchmark", "Not Demon", "Promoted", "Demoted", "Technicality"];
-
 // Every page that uses the ranking layout. Each one loads data/_<page>.json
-const RANKING_PAGES = ['edl', 'mdl', 'hdl', 'idl', 'edl'];
+const RANKING_PAGES = ['edl', 'mdl', 'hdl', 'idl'];
 
 // Overall score = gameplay 70% + deco 20% + song 10%
 // Weights are out of 10 (integers) so the rounding stays exact.
@@ -28,11 +19,6 @@ const GRADES = [
     { grade: 'F', min: 10 }
 ];
 
-function markerTitleAttr(item) {
-    const marker = STATUS_MARKERS[item.promoted];
-    return marker ? ` title="${marker.label}"` : '';
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     const pageType = document.body.getAttribute('data-page');
     if (RANKING_PAGES.includes(pageType)) {
@@ -40,49 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-async function initRankingPage(type) {
-    const listFile = `../data/_${type}.json`;
-
-    try {
-        const response = await fetch(listFile);
-        if (!response.ok) throw new Error(`Could not locate index list: ${listFile}`);
-
-        const fileNames = await response.json();
-
-        // Entries may be written as "chimera" or "chimera.json"
-        const fetchPromises = fileNames.map(file => {
-            const path = file.endsWith('.json') ? file : `${file}.json`;
-            return fetch(`../data/${path}`).then(res => res.json());
-        });
-        const levelsData = await Promise.all(fetchPromises);
-
-        const listContainer = document.getElementById('ranking-list');
-        const filterSelect = document.getElementById('status-filter');
-
-        const searchInput = document.getElementById('level-search');
-        let statusFilter = 'All';
-        let searchQuery = '';
-
-        const refreshList = () => renderList(levelsData, listContainer, statusFilter, searchQuery);
-
-        refreshList();
-
-        filterSelect.addEventListener('change', (e) => {
-            statusFilter = e.target.value;
-            refreshList();
-        });
-
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                searchQuery = e.target.value;
-                refreshList();
-            });
-        }
-
-    } catch (error) {
-        console.error("Initialization Error:", error);
-    }
-}
+/* ---------- Helpers ---------- */
 
 function escapeHTML(value) {
     if (value === undefined || value === null) return '';
@@ -96,13 +40,143 @@ function escapeHTML(value) {
 function normalizeText(value) {
     return String(value ?? '')
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[̀-ͯ]/g, '')
         .toLowerCase()
         .trim();
 }
 
 function isNumber(value) {
     return typeof value === 'number' && Number.isFinite(value);
+}
+
+/* ---------- Overall score ---------- */
+
+function calculateScore(item) {
+    const keys = Object.keys(SCORE_WEIGHTS);
+    if (!keys.every(key => isNumber(item[key]))) return null;
+
+    // `exact` keeps the decimals so sorting by score doesn't lose ties to rounding
+    const exact = keys.reduce((sum, key) => sum + item[key] * SCORE_WEIGHTS[key], 0) / 10;
+    const total = Math.round(exact);
+    const entry = GRADES.find(g => total >= g.min) ?? GRADES[GRADES.length - 1];
+
+    return { total, exact, grade: entry.grade };
+}
+
+/* ---------- Sorting ---------- */
+
+// diffRating is stored as text ("14.15") so trailing zeros survive, so it is parsed here.
+function getDifficulty(item) {
+    const value = typeof item.diffRating === 'string' ? Number.parseFloat(item.diffRating) : item.diffRating;
+    return isNumber(value) ? value : null;
+}
+
+function getScore(item) {
+    return calculateScore(item)?.exact ?? null;
+}
+
+function getAttempts(item) {
+    return isNumber(item.attempts) ? item.attempts : null;
+}
+
+// Keys match the <option value> entries in the page's #sort-select.
+const SORTS = {
+    'difficulty-desc': { read: getDifficulty, direction: 'desc' },
+    'difficulty-asc': { read: getDifficulty, direction: 'asc' },
+    'score-desc': { read: getScore, direction: 'desc' },
+    'score-asc': { read: getScore, direction: 'asc' },
+    'attempts-desc': { read: getAttempts, direction: 'desc' },
+    'attempts-asc': { read: getAttempts, direction: 'asc' }
+};
+
+const DEFAULT_SORT = 'difficulty-desc';
+
+// The rank badge always shows a level's place in this order, whatever the list is
+// currently sorted by, so "#3" means the same thing in every view.
+const RANK_SORT = 'difficulty-desc';
+
+function sortLevels(levels, sortKey) {
+    const { read, direction } = SORTS[sortKey] ?? SORTS[DEFAULT_SORT];
+    const factor = direction === 'asc' ? 1 : -1;
+
+    // Array.prototype.sort is stable, so equal values keep their order from the index file.
+    return [...levels].sort((a, b) => {
+        const left = read(a);
+        const right = read(b);
+
+        // Levels missing the value go to the bottom in either direction.
+        if (left === null && right === null) return 0;
+        if (left === null) return 1;
+        if (right === null) return -1;
+
+        return (left - right) * factor;
+    });
+}
+
+function buildRankMap(levels) {
+    return new Map(sortLevels(levels, RANK_SORT).map((item, index) => [item, index + 1]));
+}
+
+/* ---------- Loading ---------- */
+
+async function fetchLevel(file) {
+    // Entries may be written as "chimera" or "chimera.json"
+    const path = file.endsWith('.json') ? file : `${file}.json`;
+    const response = await fetch(`../data/${path}`);
+    if (!response.ok) throw new Error(`Could not load level file: ${path}`);
+    return response.json();
+}
+
+async function initRankingPage(type) {
+    const listFile = `../data/_${type}.json`;
+
+    try {
+        const response = await fetch(listFile);
+        if (!response.ok) throw new Error(`Could not locate index list: ${listFile}`);
+
+        const fileNames = await response.json();
+
+        // One missing or broken level file shouldn't take the whole list down.
+        const results = await Promise.allSettled(fileNames.map(fetchLevel));
+        const levelsData = [];
+        results.forEach(result => {
+            if (result.status === 'fulfilled') {
+                levelsData.push(result.value);
+            } else {
+                console.warn(result.reason);
+            }
+        });
+
+        const listContainer = document.getElementById('ranking-list');
+        const sortSelect = document.getElementById('sort-select');
+        const searchInput = document.getElementById('level-search');
+
+        const ranks = buildRankMap(levelsData);
+        // Read the select, not the default: browsers can restore a previous choice on reload.
+        let sortKey = sortSelect && SORTS[sortSelect.value] ? sortSelect.value : DEFAULT_SORT;
+        let searchQuery = '';
+
+        const refreshList = () => renderList(levelsData, ranks, listContainer, sortKey, searchQuery);
+
+        refreshList();
+
+        if (sortSelect) {
+            sortSelect.addEventListener('change', (e) => {
+                sortKey = e.target.value;
+                refreshList();
+            });
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value;
+                refreshList();
+            });
+        }
+
+    } catch (error) {
+        console.error("Initialization Error:", error);
+    }
 }
 
 /* ---------- Comments ---------- */
@@ -167,18 +241,7 @@ function buildVideoSection(item) {
             </section>`;
 }
 
-/* ---------- Overall score ---------- */
-
-function calculateScore(item) {
-    const keys = Object.keys(SCORE_WEIGHTS);
-    if (!keys.every(key => isNumber(item[key]))) return null;
-
-    const weighted = keys.reduce((sum, key) => sum + item[key] * SCORE_WEIGHTS[key], 0) / 10;
-    const total = Math.round(weighted);
-    const entry = GRADES.find(g => total >= g.min) ?? GRADES[GRADES.length - 1];
-
-    return { total, grade: entry.grade };
-}
+/* ---------- Score card ---------- */
 
 function buildScoreSection(item) {
     const score = calculateScore(item);
@@ -235,62 +298,22 @@ function buildStats(item) {
     return stats.join('\n                ');
 }
 
-/* ---------- Reliability ---------- */
-
-function buildReliabilitySection(item) {
-    const level = Number.isInteger(item.reliability) && item.reliability >= 0 && item.reliability <= 4
-        ? item.reliability
-        : null;
-    const note = typeof item.reliable === 'string' && item.reliable.trim() !== '' && item.reliable.trim() !== '-'
-        ? item.reliable
-        : '';
-
-    if (level === null && !note) return '';
-
-    const indicator = level === null ? '' : `
-                <p class="reliability-indicator">
-                    <span class="reliability-dot" data-level="${level}" aria-hidden="true"></span>
-                    <span class="reliability-text">${level}/4 confidence</span>
-                </p>`;
-
-    return `
-            <section class="preview-reliable">
-                <h3 class="preview-label">Placement reliability</h3>${indicator}
-                ${note ? `<p>${escapeHTML(note)}</p>` : ''}
-            </section>`;
-}
-
 /* ---------- List ---------- */
 
-function renderList(data, container, filter, query = '') {
+function renderList(levels, ranks, container, sortKey, query = '') {
     container.innerHTML = '';
-    let rankCounter = 1;
     let shown = 0;
     const needle = normalizeText(query);
 
-    data.forEach(item => {
-        const isUnranked = UNRANKED_STATUSES.includes(item.promoted);
-        let rankDisplay = "—";
-        let rankLabel = "Unranked";
-        if (!isUnranked) {
-            rankDisplay = `#${rankCounter}`;
-            rankLabel = `Rank ${rankCounter}`;
-            rankCounter++;
-        }
-
-        const marker = STATUS_MARKERS[item.promoted];
-        if (marker) {
-            rankDisplay = isUnranked ? marker.symbol : rankDisplay + marker.symbol;
-            rankLabel += `, ${marker.label}`;
-        }
-
-        if (filter !== 'All' && item.promoted !== filter) {
-            return;
-        }
+    sortLevels(levels, sortKey).forEach(item => {
         if (needle && !normalizeText(item.name).includes(needle)) {
             return;
         }
         shown++;
+
+        const rank = ranks.get(item);
+        const rankDisplay = `#${rank}`;
+        const rankLabel = `Rank ${rank}`;
 
         const li = document.createElement('li');
         const button = document.createElement('button');
@@ -300,7 +323,7 @@ function renderList(data, container, filter, query = '') {
         if (item === selectedItem) button.setAttribute('aria-current', 'true');
 
         button.innerHTML = `
-            <span class="rank-badge" aria-hidden="true"${markerTitleAttr(item)}>${rankDisplay}</span>
+            <span class="rank-badge" aria-hidden="true">${rankDisplay}</span>
             <span class="sr-only">${rankLabel}:</span>
             <span class="level-name">${escapeHTML(item.name)}</span>
         `;
@@ -316,15 +339,14 @@ function renderList(data, container, filter, query = '') {
     if (shown === 0) {
         const empty = document.createElement('li');
         empty.className = 'list-empty';
-        empty.textContent = 'No levels match your search.';
+        empty.textContent = needle ? 'No levels match your search.' : 'No levels yet.';
         container.appendChild(empty);
     }
 
     const status = document.getElementById('results-status');
     if (status) {
-        const narrowed = needle || filter !== 'All';
-        status.textContent = narrowed
-            ? `Showing ${shown} of ${data.length} levels`
+        status.textContent = needle
+            ? `Showing ${shown} of ${levels.length} levels`
             : '';
     }
 }
@@ -354,11 +376,10 @@ function updatePreview(item, rankDisplay, rankLabel) {
         <article class="preview-card">
             <header class="preview-header">
                 <h2 class="preview-title">
-                    <span class="preview-rank" aria-hidden="true"${markerTitleAttr(item)}>${rankDisplay}</span>
+                    <span class="preview-rank" aria-hidden="true">${rankDisplay}</span>
                     <span class="sr-only">${rankLabel}:</span>${escapeHTML(item.name)}
                     <span class="preview-meta">${escapeHTML(item.creator)}</span>
                 </h2>
-                <p class="preview-meta">${escapeHTML(item.promoted)}</p>
             </header>
             ${buildCommentsSection(item)}
             ${buildVideoSection(item)}
@@ -366,7 +387,6 @@ function updatePreview(item, rankDisplay, rankLabel) {
             <dl class="preview-stats">
                 ${buildStats(item)}
             </dl>
-            ${buildReliabilitySection(item)}
         </article>
     `;
 }

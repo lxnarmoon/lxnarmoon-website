@@ -29,7 +29,8 @@ body[data-page="home"] {
     --accent-rgb: 18 91 251;
 }
 
-body[data-page="edl"] {
+body[data-page="edl"],
+body[data-page="add-level"] {
     --accent: #9944ff;
     --accent-text: #c08cff;
     --accent-rgb: 153 68 255;
@@ -260,7 +261,8 @@ nav {
 }
 
 .search-controls,
-.filter-controls {
+.filter-controls,
+.sort-controls {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
@@ -268,12 +270,14 @@ nav {
 }
 
 .search-controls label,
-.filter-controls label {
+.filter-controls label,
+.sort-controls label {
     font-size: 0.8rem;
     color: var(--text-dim);
 }
 
-.search-controls+.filter-controls {
+.search-controls+.filter-controls,
+.search-controls+.sort-controls {
     padding-top: 0;
 }
 
@@ -290,7 +294,8 @@ nav {
     border-color: rgb(var(--accent-rgb) / 0.7);
 }
 
-.filter-controls select {
+.filter-controls select,
+.sort-controls select {
     width: 100%;
     min-height: 40px;
     padding: 0.5rem 2.25rem 0.5rem 0.75rem;
@@ -304,7 +309,8 @@ nav {
     background-position: right 0.85rem center;
 }
 
-.filter-controls select:hover {
+.filter-controls select:hover,
+.sort-controls select:hover {
     border-color: rgb(var(--accent-rgb) / 0.7);
 }
 
@@ -468,17 +474,6 @@ nav {
     color: var(--accent-text);
 }
 
-.preview-reliable {
-    padding: 1.25rem 1.5rem 1.5rem;
-    border-top: 1px solid var(--line);
-}
-
-.preview-reliable p {
-    line-height: 1.7;
-    white-space: pre-line;
-    overflow-wrap: anywhere;
-}
-
 @media (max-width: 479px) {
     .preview-stats {
         grid-template-columns: minmax(0, 1fr);
@@ -495,7 +490,7 @@ nav {
     margin: 2rem auto;
     padding: 2rem 1.5rem;
     text-align: center;
-    color: var(--text-dim);No
+    color: var(--text-dim);
     border: 1px dashed var(--line-strong);
     border-radius: var(--radius);
 }
@@ -529,8 +524,7 @@ nav {
 }
 
 /* ==========================================================
-   Additions: video, overall score, reliability, stats grid
-   Paste at the very end of styles.css
+   Video, overall score, stats grid, comments
    ========================================================== */
 
 /* ---------- Video ---------- */
@@ -671,237 +665,6 @@ nav {
     .preview-stats {
         grid-template-columns: minmax(0, 1fr);
     }
-}
-
-/* ---------- Reliability indicator ---------- */
-
-.reliability-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 0.5rem;
-    font-weight: 700;
-}
-
-.reliability-dot {
-    flex: none;
-    width: 1rem;
-    height: 1rem;
-    background-color: var(--dot);
-    border: 2px solid transparent;
-    border-radius: 50%;
-    box-shadow: 0 0 0.6rem -0.1rem var(--dot);
-}
-
-.reliability-dot[data-level="4"] {
-    --dot: #3ddc84;
-}
-
-.reliability-dot[data-level="3"] {
-    --dot: #facc15;
-}
-
-.reliability-dot[data-level="2"] {
-    --dot: #fb923c;
-}
-
-.reliability-dot[data-level="1"] {
-    --dot: #ef4444;
-}
-
-/* black disappears on a dark page, so it gets a light outline */
-.reliability-dot[data-level="0"] {
-    --dot: #000;
-    border-color: #8b95ad;
-    box-shadow: none;
-}
-
-/* ==========================================================
-   Additions: video, overall score, reliability, stats grid
-   Paste at the very end of styles.css
-   ========================================================== */
-
-/* ---------- Video ---------- */
-
-.preview-video {
-    background-color: #000;
-    border-bottom: 1px solid var(--line);
-}
-
-.video-frame {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-}
-
-.video-frame iframe {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-}
-
-/* ---------- Overall score ---------- */
-
-.preview-score {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 1rem 2rem;
-    padding: 1.25rem 1.5rem;
-    border-top: 1px solid var(--line);
-}
-
-.score-overall {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.score-grade {
-    display: grid;
-    place-items: center;
-    min-width: 3.75rem;
-    height: 3.75rem;
-    padding: 0 0.6rem;
-    background-color: rgb(var(--accent-rgb) / 0.14);
-    border: 2px solid var(--accent);
-    border-radius: var(--radius);
-    color: var(--accent-text);
-    font-family: var(--font-mono);
-    font-size: 1.7rem;
-    font-weight: 700;
-    line-height: 1;
-}
-
-.score-overall .preview-label {
-    margin-bottom: 0.1rem;
-}
-
-.score-number {
-    font-family: var(--font-mono);
-    font-size: clamp(1.6rem, 3vw, 2.2rem);
-    font-weight: 700;
-    line-height: 1.1;
-    color: var(--text);
-}
-
-.score-max {
-    margin-left: 0.15rem;
-    font-size: 0.9rem;
-    font-weight: 400;
-    color: var(--text-dim);
-}
-
-.score-breakdown {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.5rem;
-}
-
-.score-part {
-    padding: 0.5rem 0.75rem;
-    background-color: var(--bg-field);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-}
-
-.score-part dt {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--text-dim);
-}
-
-.score-weight {
-    margin-left: 0.2rem;
-    font-weight: 400;
-}
-
-.score-part dd {
-    font-family: var(--font-mono);
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
-@media (max-width: 639px) {
-    .preview-score {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-
-@media (max-width: 479px) {
-    .score-breakdown {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-
-/* ---------- Stats grid (handles 2 or 4 stats) ---------- */
-
-.preview-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1px;
-    background-color: var(--line);
-}
-
-.stat,
-.stat+.stat {
-    background-color: var(--bg-panel);
-    border: 0;
-}
-
-/* an odd stat out fills the whole last row */
-.stat:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-}
-
-@media (max-width: 479px) {
-    .preview-stats {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-
-/* ---------- Reliability indicator ---------- */
-
-.reliability-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 0.5rem;
-    font-weight: 700;
-}
-
-.reliability-dot {
-    flex: none;
-    width: 1rem;
-    height: 1rem;
-    background-color: var(--dot);
-    border: 2px solid transparent;
-    border-radius: 50%;
-    box-shadow: 0 0 0.6rem -0.1rem var(--dot);
-}
-
-.reliability-dot[data-level="4"] {
-    --dot: #3ddc84;
-}
-
-.reliability-dot[data-level="3"] {
-    --dot: #facc15;
-}
-
-.reliability-dot[data-level="2"] {
-    --dot: #fb923c;
-}
-
-.reliability-dot[data-level="1"] {
-    --dot: #ef4444;
-}
-
-/* black disappears on a dark page, so it gets a light outline */
-.reliability-dot[data-level="0"] {
-    --dot: #000;
-    border-color: #8b95ad;
-    box-shadow: none;
 }
 
 /* ---------- Comments (compact, sits under the header) ---------- */
@@ -919,4 +682,234 @@ nav {
     max-width: 65ch;
     line-height: 1.6;
     overflow-wrap: anywhere;
+}
+
+/* ==========================================================
+   Add Level page
+   ========================================================== */
+
+.add-container {
+    max-width: 46rem;
+}
+
+.add-container code {
+    padding: 0.05rem 0.35rem;
+    background-color: var(--bg-field);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+}
+
+.add-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.add-header h1 {
+    margin-bottom: 0.25rem;
+}
+
+.unlock-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.unlock-form .field {
+    flex: 1 1 12rem;
+}
+
+.unlock-form input {
+    font-family: var(--font-mono);
+    font-size: 1.2rem;
+    letter-spacing: 0.2em;
+}
+
+#level-form fieldset {
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.1rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+#level-form legend {
+    padding: 0 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.9rem;
+}
+
+.field label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-dim);
+}
+
+.req {
+    color: var(--accent-text);
+}
+
+.field input,
+.field textarea {
+    width: 100%;
+    min-height: 40px;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--bg-field);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius);
+}
+
+.field textarea {
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.field input:hover,
+.field textarea:hover {
+    border-color: rgb(var(--accent-rgb) / 0.7);
+}
+
+.field [aria-invalid="true"] {
+    border-color: #ef4444;
+}
+
+.field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 1rem;
+}
+
+.field-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 479px) {
+
+    .field-grid,
+    .field-grid-3 {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.field-hint,
+.field-error {
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.field-hint {
+    margin-bottom: 0.75rem;
+    color: var(--text-dim);
+}
+
+.field-error {
+    color: #ff8a8a;
+}
+
+.score-live {
+    display: block;
+    margin-bottom: 0.9rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--accent-text);
+}
+
+.advanced {
+    margin-bottom: 1.25rem;
+    padding: 0.7rem 1.1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.advanced summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+.advanced[open] summary {
+    margin-bottom: 0.75rem;
+}
+
+.json-preview {
+    max-height: 18rem;
+    overflow: auto;
+    padding: 0.75rem 1rem;
+    background-color: var(--bg-field);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.button {
+    min-height: 40px;
+    padding: 0.5rem 1.25rem;
+    background-color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter 0.15s;
+}
+
+.button:hover {
+    filter: brightness(1.12);
+}
+
+.button:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+.button-quiet {
+    background-color: transparent;
+    border-color: var(--control-border);
+    color: var(--text-dim);
+}
+
+.form-status {
+    min-height: 1.5rem;
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-dim);
+}
+
+.form-status[data-state="error"] {
+    color: #ff8a8a;
+}
+
+.form-status[data-state="success"] {
+    color: #3ddc84;
+}
+
+.form-status a {
+    color: var(--accent-text);
+}
+
+[hidden] {
+    display: none !important;
 }
