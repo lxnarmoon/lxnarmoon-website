@@ -272,15 +272,40 @@ function getYouTubeId(url) {
     return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
 }
 
+// Reads the timestamp from a link and returns it in whole seconds, or null when there isn't one.
+// Understands t=268, t=268s, t=4m28s, t=1h2m3s, start=268 and #t=268.
+function getYouTubeStart(url) {
+    if (typeof url !== 'string') return null;
+
+    let parsed;
+    try {
+        parsed = new URL(url.trim());
+    } catch {
+        return null;
+    }
+
+    const hash = new URLSearchParams(parsed.hash.replace(/^#/, ''));
+    const raw = parsed.searchParams.get('t') ?? parsed.searchParams.get('start') ?? hash.get('t');
+    const match = typeof raw === 'string' ? raw.trim().match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/i) : null;
+    if (!match) return null;
+
+    const [, hours = 0, minutes = 0, seconds = 0] = match;
+    const total = Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+    return total > 0 && total <= 359999 ? total : null;
+}
+
 function buildVideoSection(item) {
     const id = getYouTubeId(item.video);
     if (!id) return '';
+
+    const start = getYouTubeStart(item.video);
+    const embedUrl = `https://www.youtube-nocookie.com/embed/${id}${start ? `?start=${start}` : ''}`;
 
     return `
             <section class="preview-video">
                 <div class="video-frame">
                     <iframe
-                        src="https://www.youtube-nocookie.com/embed/${id}"
+                        src="${embedUrl}"
                         title="${escapeHTML(item.name)} video"
                         loading="lazy"
                         referrerpolicy="strict-origin-when-cross-origin"
