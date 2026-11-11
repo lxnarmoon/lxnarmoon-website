@@ -6,7 +6,7 @@
 //
 // Paste the address of your deployed worker here (steps are in worker/README.md).
 // It is a public address, not a secret. Example: 'https://add-level.yourname.workers.dev'
-const WORKER_URL = 'add-level.luna-kmoon2.workers.dev';
+const WORKER_URL = 'https://add-level.luna-kmoon2.workers.dev';
 
 (() => {
     // Which list this page adds to. The worker also accepts 'idl', 'hdl' and 'mdl'.
