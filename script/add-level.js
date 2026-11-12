@@ -29,6 +29,10 @@ const WORKER_URL = 'https://add-level.luna-kmoon2.workers.dev';
     const levelForm = $('level-form');
     const submitButton = $('submit-button');
     const formStatus = $('form-status');
+    const previewButton = $('preview-button');
+    const announceBox = $('announce-box');
+    const announceTitle = $('announce-title');
+    const announcePreview = $('announce-preview');
     const jsonPreview = $('json-preview');
     const scoreLive = $('score-live');
     const fileDetails = $('file-details');
@@ -290,9 +294,29 @@ const WORKER_URL = 'https://add-level.luna-kmoon2.workers.dev';
 
     /* ---------- Saving ---------- */
 
+    function showAnnouncement(title, text) {
+        if (typeof text !== 'string' || !text) {
+            announceBox.hidden = true;
+            announcePreview.textContent = '';
+            return;
+        }
+        announceBox.dataset.kind = /preview/.test(title) ? 'preview' : 'result';
+        announceTitle.textContent = title;
+        announcePreview.textContent = text;
+        announceBox.hidden = false;
+    }
+
+    const DISCORD_NOTES = {
+        sent: 'Posted to Discord. ',
+        skipped: 'Nothing was posted to Discord (no webhook is set up). ',
+        failed: 'Saved, but the Discord post failed, so nothing was announced. The message is below if you want to post it by hand. '
+    };
+
     function showSuccess(level, result) {
-        formStatus.dataset.state = 'success';
-        formStatus.textContent = `Added “${level.name}” as ${result.file}. It shows up once the site rebuilds from GitHub. `;
+        formStatus.dataset.state = result.discord === 'failed' ? 'error' : 'success';
+        formStatus.textContent = `Added “${level.name}” as ${result.file}. ${DISCORD_NOTES[result.discord] ?? ''}It shows up once the site rebuilds from GitHub. `;
+        if (result.discord === 'failed') showAnnouncement('Discord message (not posted)', result.announcement);
+        else showAnnouncement('', '');
         if (typeof result.url === 'string' && /^https:\/\/github\.com\//.test(result.url)) {
             const link = document.createElement('a');
             link.href = result.url;
@@ -345,6 +369,49 @@ const WORKER_URL = 'https://add-level.luna-kmoon2.workers.dev';
         }
     }
 
+    // Shows the Discord message this level would produce, without saving or posting anything.
+    async function handlePreview() {
+        if (busy || !session) return;
+
+        const { level, file, errors } = readForm();
+        showFieldErrors(errors);
+        if (Object.keys(errors).length) {
+            setStatus(formStatus, 'error', 'Some fields need fixing before the announcement can be previewed.');
+            focusFirstInvalid(errors);
+            return;
+        }
+
+        busy = true;
+        previewButton.disabled = true;
+        submitButton.disabled = true;
+        setStatus(formStatus, 'info', 'Working out the placements…');
+        const body = { list: TARGET_LIST, level };
+        if (file) body.file = file;
+        const { status, data } = await callWorker('/preview', body, session.token);
+        busy = false;
+        previewButton.disabled = false;
+        submitButton.disabled = false;
+
+        if (status === 200 && data.ok) {
+            setStatus(formStatus, 'info', data.webhook
+                ? 'Preview only. Nothing was saved or posted.'
+                : 'Preview only. Nothing was saved or posted, and no Discord webhook is set up yet.');
+            showAnnouncement('Discord message (preview, formatting symbols shown as typed)', data.announcement);
+        } else if (status === 401) {
+            showLocked('error', data.error || 'Your session ended. Enter a new code to continue. Your form is kept.');
+        } else if (status === 400 && data.fields) {
+            showFieldErrors(data.fields);
+            setStatus(formStatus, 'error', data.error || 'Some fields need fixing.');
+            focusFirstInvalid(data.fields);
+        } else if (status === 0) {
+            setStatus(formStatus, 'error', UNREACHABLE);
+        } else if (status === 404) {
+            setStatus(formStatus, 'error', 'The Add Level service needs its new code before it can preview. See worker/README.md.');
+        } else {
+            setStatus(formStatus, 'error', data.error || 'Something went wrong. Nothing was saved or posted.');
+        }
+    }
+
     /* ---------- Start up ---------- */
 
     function init() {
@@ -360,11 +427,14 @@ const WORKER_URL = 'https://add-level.luna-kmoon2.workers.dev';
 
         unlockForm.addEventListener('submit', handleUnlock);
         levelForm.addEventListener('submit', handleSubmit);
+        previewButton.addEventListener('click', handlePreview);
         lockButton.addEventListener('click', () => showLocked('info', 'Locked. Enter a new code to unlock again.'));
 
         levelForm.addEventListener('input', event => {
             const key = event.target.id.replace(/^f-/, '');
             if (key === 'file') fileTouched = event.target.value.trim() !== '';
+            // A preview describes the form as it was, so it goes away once the form changes.
+            if (announceBox.dataset.kind === 'preview') announceBox.hidden = true;
             const message = $(`e-${key}`);
             if (message && !message.hidden) {
                 message.hidden = true;

@@ -144,21 +144,26 @@ const DEFAULT_SORT = 'difficulty-desc';
 // currently sorted by, so "#3" means the same thing in every view.
 const RANK_SORT = 'difficulty-desc';
 
+const NAME_COLLATOR = new Intl.Collator('en', { sensitivity: 'base' });
+
 function sortLevels(levels, sortKey) {
     const { read, direction } = SORTS[sortKey] ?? SORTS[DEFAULT_SORT];
     const factor = direction === 'asc' ? 1 : -1;
 
-    // Array.prototype.sort is stable, so equal values keep their order from the index file.
+    // Equal values are ordered A-Z by name (ignoring capitals), in every sort and direction.
+    // The Discord announcement in worker/add-level-worker.js uses the same rule.
+    const byName = (a, b) => NAME_COLLATOR.compare(String(a.name ?? ''), String(b.name ?? ''));
+
     return [...levels].sort((a, b) => {
         const left = read(a);
         const right = read(b);
 
         // Levels missing the value go to the bottom in either direction.
-        if (left === null && right === null) return 0;
+        if (left === null && right === null) return byName(a, b);
         if (left === null) return 1;
         if (right === null) return -1;
 
-        return (left - right) * factor;
+        return (left - right) * factor || byName(a, b);
     });
 }
 

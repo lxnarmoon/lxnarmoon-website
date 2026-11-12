@@ -6,17 +6,25 @@
  * level file and the updated index to GitHub in a single commit.
  *
  *   POST /login    { code }                   -> { token, expiresAt }
- *   POST /levels   { list, level, file? }     -> { ok, file, commit, url }   (Bearer token)
+ *   POST /levels   { list, level, file? }     -> { ok, file, commit, url, discord, announcement? }   (Bearer token)
+ *   POST /preview  { list, level, file? }     -> { ok, announcement, webhook }   (Bearer token; saves and posts nothing)
+ *
+ * After a level is added to the EDL list, the worker also posts a changelog message to Discord
+ * (placements by difficulty, score and attempts). `discord` says what happened: 'sent',
+ * 'skipped' (no webhook set up) or 'failed'. The level is saved either way; when the post
+ * fails, `announcement` holds the message so it can be posted by hand.
  *
  * Setup steps are in worker/README.md. Nothing secret lives in this file.
  *
  * Settings (Cloudflare dashboard -> your Worker -> Settings):
- *   TOTP_SECRET     secret    base32 key shared with your Authenticator app
- *   GITHUB_TOKEN    secret    fine-grained token, this repo only, Contents: read and write
- *   ALLOWED_ORIGIN  variable  site origin(s), comma separated, e.g. https://you.github.io
- *   RATE_LIMIT      KV binding used for lockouts and one-time-use codes
- *   GITHUB_REPO     variable  optional, defaults to the repo below
- *   GITHUB_BRANCH   variable  optional, defaults to main
+ *   TOTP_SECRET          secret    base32 key shared with your Authenticator app
+ *   GITHUB_TOKEN         secret    fine-grained token, this repo only, Contents: read and write
+ *   ALLOWED_ORIGIN       variable  site origin(s), comma separated, e.g. https://you.github.io
+ *   RATE_LIMIT           KV binding used for lockouts and one-time-use codes
+ *   DISCORD_WEBHOOK_URL  secret    optional, the changelog channel's webhook address
+ *   DISCORD_ROLE_ID      variable  optional, role pinged under each post (defaults to EDS Changelog)
+ *   GITHUB_REPO          variable  optional, defaults to the repo below
+ *   GITHUB_BRANCH        variable  optional, defaults to main
  */
 
 const DEFAULT_REPO = 'lxnarmoon/lxnarmoon-website';
@@ -84,6 +92,7 @@ async function handle(request, env) {
     const route = new URL(request.url).pathname.replace(/\/+$/, '');
     if (route === '/login') return json(200, await login(request, env), request, env);
     if (route === '/levels') return json(200, await addLevel(request, env), request, env);
+    if (route === '/preview') return json(200, await previewAnnouncement(request, env), request, env);
     throw new HttpError(404, 'Not found.');
 }
 
@@ -480,7 +489,13 @@ async function addLevel(request, env) {
         throw new HttpError(400, 'Some fields need fixing.', { fields: errors });
     }
 
-    return commitLevel(env, { list: body.list, file, level });
+    const saved = await commitLevel(env, { list: body.list, file, level });
+
+    // The level is already committed, so nothing below may undo it or throw.
+    if (body.list === 'edl') {
+        Object.assign(saved.result, await announceLevel(env, { ...saved, level }));
+    }
+    return saved.result;
 }
 
 /* ---------- GitHub ---------- */
@@ -545,6 +560,9 @@ async function commitLevel(env, { list, file, level }) {
         throw new HttpError(500, `${indexPath} is not a plain list of file names, so it was left alone.`);
     }
 
+    // The list as it was before this level, used afterwards to work out where the level placed.
+    const entries = [...index];
+
     const files = [{ path: levelPath, content: JSON.stringify(level, null, 4) + '\n' }];
     // An entry may already exist without a file (a placeholder). Then only the file is added.
     if (!index.some(entry => entry.replace(/\.json$/, '') === file)) {
@@ -579,5 +597,289 @@ async function commitLevel(env, { list, file, level }) {
         throw new HttpError(409, 'The repository changed while saving. Nothing was added; please try again.');
     }
 
-    return { ok: true, file: levelPath, list, commit: commit.sha, url: commit.html_url };
+    return {
+        result: { ok: true, file: levelPath, list, commit: commit.sha, url: commit.html_url },
+        repo,
+        headSha,
+        entries
+    };
+}
+
+/* ---------- Discord announcement (EDL list only) ---------- */
+
+// Role pinged under every post. Change it with the DISCORD_ROLE_ID variable instead of editing this.
+const DEFAULT_PING_ROLE_ID = '1439890188078944356';
+const DISCORD_MAX_CHARS = 2000;
+const TOP_TEN = 10;
+
+// Levels are read from GitHub in a single query per batch, because a worker may only make a
+// limited number of outside requests and a list can hold hundreds of levels.
+const GRAPHQL_BATCH = 150;
+const GRAPHQL_MAX_BATCHES = 10;
+
+// Same weights as the website: gameplay 70%, deco 20%, song 10%.
+const SCORE_PARTS = [['gameplay', 7], ['deco', 2], ['song', 1]];
+
+// In the order they appear in the message. Every board is sorted high to low.
+const BOARDS = [
+    { key: 'difficulty', by: 'difficulty', title: 'Top Ten By Difficulty' },
+    { key: 'score', by: 'score', title: 'Top Ten By Score' },
+    { key: 'attempts', by: 'attempts', title: 'Top Ten By Attempts' }
+];
+
+// The three numbers a level is ranked by. A missing value is null (the level is left off that board).
+function levelMetrics(level) {
+    const raw = level?.diffRating;
+    const text = typeof raw === 'number' ? String(raw) : typeof raw === 'string' ? raw.trim() : '';
+    const difficulty = /^\d+(\.\d+)?$/.test(text) ? Number(text) : null;
+
+    // The weighted total times ten, so equal scores are exactly equal with no rounding drift.
+    const score = SCORE_PARTS.every(([key]) => Number.isFinite(level?.[key]))
+        ? SCORE_PARTS.reduce((sum, [key, weight]) => sum + level[key] * weight, 0)
+        : null;
+
+    const attempts = Number.isFinite(level?.attempts) ? level.attempts : null;
+    return { difficulty, score, attempts };
+}
+
+// Equal values are ordered A-Z by name, ignoring capitals. The website's sorting uses the same rule
+// (NAME_COLLATOR in script/script.js), so a placement here is the place the site shows.
+const NAME_COLLATOR = new Intl.Collator('en', { sensitivity: 'base' });
+
+// Where the new level lands on each board, and who it pushes out of a top ten.
+function computePlacements(existing, level) {
+    const mine = levelMetrics(level);
+    const myName = typeof level?.name === 'string' ? level.name : '';
+    const others = existing.map(({ file, level: other }) => ({
+        file,
+        name: typeof other?.name === 'string' && other.name.trim() ? other.name.trim() : file,
+        metrics: levelMetrics(other)
+    }));
+
+    return BOARDS.flatMap(board => {
+        const value = mine[board.key];
+        if (value === null) return [];
+
+        const ranked = others
+            .filter(other => other.metrics[board.key] !== null)
+            .sort((a, b) => b.metrics[board.key] - a.metrics[board.key]
+                || NAME_COLLATOR.compare(a.name, b.name)
+                || (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+        // Everything that beats the new level: a higher value, or the same value and a name that sorts first.
+        const rank = 1 + ranked.filter(other => other.metrics[board.key] > value
+            || (other.metrics[board.key] === value && NAME_COLLATOR.compare(other.name, myName) <= 0)).length;
+
+        // The level sitting at #10 right now drops to #11. Nobody drops out of a list that
+        // doesn't have ten ranked levels yet.
+        const pushed = rank <= TOP_TEN ? ranked[TOP_TEN - 1] : undefined;
+        return [{ board, rank, pushedOut: pushed ? { file: pushed.file, name: pushed.name } : null }];
+    });
+}
+
+// Backslash-escapes the characters Discord would otherwise read as formatting, links, emoji or mentions.
+function escapeInline(text) {
+    return String(text).replace(/[\\*_~`|>#<@:[\]()-]/g, '\\$&');
+}
+
+function escapeName(name) {
+    return escapeInline(String(name).replace(/\s+/g, ' ').trim());
+}
+
+// "a", "a and b", "a, b, and c".
+function joinList(items) {
+    if (items.length <= 2) {
+        // two items that already contain "and" read better with a comma
+        return items.join(items.some(item => item.includes(' and ')) ? ', and ' : ' and ');
+    }
+    return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
+// The italic, quoted comment. Each line is italicised on its own so line breaks can't break it.
+function commentBlock(comment) {
+    const lines = String(comment).split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(escapeInline);
+    if (!lines.length) return '';
+    lines[0] = `"${lines[0]}`;
+    lines[lines.length - 1] += '"';
+    return lines.map(line => `*${line}*`).join('\n');
+}
+
+// "This pushes X out of my Top Ten By Difficulty, and Y out of my Top Ten By Score."
+// One entry per level that was pushed out; a level pushed out of two lists is named once.
+function pushLine(placements) {
+    const groups = new Map();
+    for (const { board, rank, pushedOut } of placements) {
+        if (rank > TOP_TEN || !pushedOut) continue;
+        const group = groups.get(pushedOut.file) ?? { name: pushedOut.name, titles: [] };
+        group.titles.push(board.title);
+        groups.set(pushedOut.file, group);
+    }
+    if (!groups.size) return null;
+
+    const parts = [...groups.values()].map(({ name, titles }) => `${escapeName(name)} out of my ${titles.length === 2 ? titles.join(' and ') : joinList(titles)}`);
+    const text = parts.length === 2 ? parts.join(', and ') : joinList(parts);
+    return `*This pushes ${text}.*`;
+}
+
+// The whole message:
+//   **Level** has been placed, placing at **#1** by difficulty, **#2** by score, and **#3** by attempts.
+//   *This pushes Other out of my Top Ten By Difficulty, and Another out of my Top Ten By Score.*
+//                                                    <- or, when nothing is pushed out, the comment
+//
+//   <@&role>
+function buildAnnouncement(level, placements, roleId) {
+    const spots = placements.map(({ board, rank }) => `**#${rank}** by ${board.by}`);
+    const opening = `**${escapeName(level.name)}** has been placed, placing at ${joinList(spots)}.`;
+    const pushes = pushLine(placements);
+    const ping = `<@&${roleId}>`;
+
+    const assemble = comment => [opening, pushes ?? commentBlock(comment)].filter(Boolean).join('\n') + `\n\n${ping}`;
+
+    // Discord rejects messages over 2000 characters, so a very long comment is shortened.
+    let comment = typeof level.comments === 'string' ? level.comments.trim() : '';
+    let content = assemble(comment);
+    while (content.length > DISCORD_MAX_CHARS && comment.length > 0) {
+        comment = comment.slice(0, Math.max(0, Math.floor(comment.length * 0.9) - 1)).trimEnd();
+        content = assemble(comment ? `${comment}…` : '');
+    }
+    return content;
+}
+
+function isDiscordWebhook(value) {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:'
+            && ['discord.com', 'discordapp.com', 'ptb.discord.com', 'canary.discord.com'].includes(url.hostname)
+            && /^\/api(\/v\d+)?\/webhooks\/\d+\/[\w-]+\/?$/.test(url.pathname);
+    } catch {
+        return false;
+    }
+}
+
+function redact(text, secrets) {
+    let out = String(text ?? '');
+    for (const secret of secrets) {
+        if (secret) out = out.split(String(secret)).join('[hidden]');
+    }
+    return out;
+}
+
+// Reads every existing level file as of one commit, a batch of files per request.
+async function fetchExistingLevels(env, repo, sha, entries) {
+    const [owner, name] = repo.split('/');
+    const files = [...new Set(entries.map(entry => entry.replace(/\.json$/, '')))]
+        .filter(file => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(file));
+
+    const batches = [];
+    for (let i = 0; i < files.length; i += GRAPHQL_BATCH) batches.push(files.slice(i, i + GRAPHQL_BATCH));
+    if (batches.length > GRAPHQL_MAX_BATCHES) throw new Error('There are too many levels to read at once.');
+
+    const results = await Promise.all(batches.map(async batch => {
+        const fields = batch
+            .map((file, i) => `l${i}: object(expression: ${JSON.stringify(`${sha}:data/${file}.json`)}) { ... on Blob { text } }`)
+            .join('\n');
+        const response = await fetch('https://api.github.com/graphql', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'lxnarmoon-add-level'
+            },
+            body: JSON.stringify({
+                query: `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {\n${fields}\n} }`,
+                variables: { owner, name }
+            })
+        });
+        if (!response.ok) throw new Error(`GitHub returned ${response.status} while reading the levels.`);
+
+        const payload = await response.json();
+        const repository = payload?.data?.repository;
+        if (!repository) throw new Error(`GitHub sent no level data. ${payload?.errors?.[0]?.message ?? ''}`.trim());
+
+        return batch.flatMap((file, i) => {
+            // An index entry with no file yet (a placeholder) comes back empty and is skipped.
+            const text = repository[`l${i}`]?.text;
+            if (typeof text !== 'string') return [];
+            try {
+                const level = JSON.parse(text);
+                return level && typeof level === 'object' && !Array.isArray(level) ? [{ file, level }] : [];
+            } catch {
+                return [];
+            }
+        });
+    }));
+
+    return results.flat();
+}
+
+function pingRoleId(env) {
+    return /^\d{15,25}$/.test(String(env.DISCORD_ROLE_ID || '').trim())
+        ? String(env.DISCORD_ROLE_ID).trim()
+        : DEFAULT_PING_ROLE_ID;
+}
+
+async function composeAnnouncement(env, { repo, headSha, entries, level }) {
+    const existing = await fetchExistingLevels(env, repo, headSha, entries);
+    return buildAnnouncement(level, computePlacements(existing, level), pingRoleId(env));
+}
+
+// Never throws: the level is already saved, so a Discord problem only changes the `discord` status.
+async function announceLevel(env, state) {
+    const webhook = String(env.DISCORD_WEBHOOK_URL || '').trim();
+    if (!webhook) return { discord: 'skipped' };
+
+    let content = null;
+    try {
+        content = await composeAnnouncement(env, state);
+
+        if (!isDiscordWebhook(webhook)) throw new Error('DISCORD_WEBHOOK_URL is not a Discord webhook address.');
+        const response = await fetch(webhook, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // Only the one role may be pinged, so nothing in a level name or comment can ping anyone else.
+            body: JSON.stringify({ content, allowed_mentions: { parse: [], roles: [pingRoleId(env)] } })
+        });
+        if (!response.ok) throw new Error(`Discord returned ${response.status}.`);
+        return { discord: 'sent' };
+    } catch (error) {
+        console.error('Discord post failed:', redact(error?.message, [webhook, env.GITHUB_TOKEN]));
+        return content ? { discord: 'failed', announcement: content } : { discord: 'failed' };
+    }
+}
+
+/* ---------- POST /preview ---------- */
+
+// Shows the message that adding this level would post, without saving or posting anything.
+async function previewAnnouncement(request, env) {
+    await requireSession(request, env);
+    const body = await readJson(request);
+
+    if (body.list !== 'edl') throw new HttpError(400, 'Announcements are only posted for the EDL list.');
+    const { level, errors } = validateLevel(body.level, body.file);
+    if (errors) throw new HttpError(400, 'Some fields need fixing.', { fields: errors });
+
+    const repo = env.GITHUB_REPO || DEFAULT_REPO;
+    const branch = env.GITHUB_BRANCH || DEFAULT_BRANCH;
+    const base = `/repos/${repo}`;
+    const ref = await (await github(env, `${base}/git/ref/heads/${branch}`)).json();
+    const headSha = ref.object.sha;
+    const indexResponse = await github(env, `${base}/contents/data/_edl.json?ref=${headSha}`);
+
+    let entries = null;
+    try {
+        entries = JSON.parse(decodeBase64Utf8((await indexResponse.json()).content));
+    } catch {
+        entries = null;
+    }
+    if (!Array.isArray(entries) || !entries.every(entry => typeof entry === 'string')) {
+        throw new HttpError(500, 'data/_edl.json is not a plain list of file names.');
+    }
+
+    let announcement;
+    try {
+        announcement = await composeAnnouncement(env, { repo, headSha, entries, level });
+    } catch (error) {
+        console.error('Preview failed:', redact(error?.message, [env.GITHUB_TOKEN]));
+        throw new HttpError(502, 'Could not read the existing levels to work out the placements.');
+    }
+    return { ok: true, announcement, webhook: Boolean(String(env.DISCORD_WEBHOOK_URL || '').trim()) };
 }

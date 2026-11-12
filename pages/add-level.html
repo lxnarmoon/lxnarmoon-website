@@ -164,8 +164,13 @@
 
         <div class="form-actions">
           <button class="button" type="submit" id="submit-button">Add level</button>
+          <button class="button button-quiet" type="button" id="preview-button">Preview announcement</button>
         </div>
         <p id="form-status" class="form-status" role="status"></p>
+        <div id="announce-box" hidden>
+          <p class="field-hint" id="announce-title">Discord message</p>
+          <pre id="announce-preview" class="json-preview" aria-labelledby="announce-title"></pre>
+        </div>
       </form>
     </section>
   </main>
